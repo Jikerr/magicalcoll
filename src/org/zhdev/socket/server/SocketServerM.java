@@ -227,6 +227,55 @@ public class SocketServerM {
                         case "getOnlineList":
                             getOnlineList();
                             break;
+
+                        case "ForwardCommandToUser"://转发命令到指定用户
+                            try {
+                                String toClientId = messageBean.getToClientId();
+                                String fromClientId = messageBean.getFromClientId();
+                                String msgContent = messageBean.getMsgContent();
+
+                                JSONObject msgContentJsonObj = new JSONObject(msgContent);
+                                String command = msgContentJsonObj.getString("command");
+                                String remark = msgContentJsonObj.getString("remark");
+
+                                ServiceClient serviceClient = null;//找到要发送的用户线程
+                                for (Map.Entry<Users, ServiceClient> entry : clients.entrySet()) {
+                                    Users userTemp = entry.getKey();//每个user
+                                    String userClientId = userTemp.getClientId();
+                                    if(toClientId.equals(userClientId)){
+                                        serviceClient = entry.getValue();
+                                        break;
+                                    }
+                                }
+                                if(serviceClient==null){
+                                    //错误返回
+                                    MessageBean errorResponseMsgBean = new MessageBean();
+                                    errorResponseMsgBean.setToClientId(toClientId);
+                                    errorResponseMsgBean.setFromClientId("0");
+                                    errorResponseMsgBean.setMsgContent("对方可能已经下线");
+                                    errorResponseMsgBean.setMsgType("UserOffline");
+                                    errorResponseMsgBean.setUser(getSystemUser());
+                                    send(errorResponseMsgBean);//告知发送失败 , 对方可能已经下线了
+                                }else{
+                                    //发送到目的地
+                                    serviceClient.send(messageBean);//这里要使用目的地的线程发送
+                                    //告知转发成功 , 告知已经转发成功
+                                    MessageBean errorResponseMsgBean = new MessageBean();
+                                    errorResponseMsgBean.setToClientId(toClientId);
+                                    errorResponseMsgBean.setFromClientId("0");
+                                    errorResponseMsgBean.setMsgContent("命令成功送达!");
+                                    errorResponseMsgBean.setMsgType("MessageForwardSuccess");
+                                    errorResponseMsgBean.setUser(getSystemUser());
+                                    send(errorResponseMsgBean);//告知发送失败 , 对方可能已经下线了
+                                }
+
+                            } catch (JSONException jsonE) {
+                                jsonE.printStackTrace();
+                            }
+
+
+                            break;
+
                         default:
                             break;
                     }
