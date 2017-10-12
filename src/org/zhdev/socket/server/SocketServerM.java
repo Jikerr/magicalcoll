@@ -255,7 +255,7 @@ public class SocketServerM {
                                     errorResponseMsgBean.setMsgContent("对方可能已经下线");
                                     errorResponseMsgBean.setMsgType("UserOffline");
                                     errorResponseMsgBean.setUser(getSystemUser());
-                                    send(errorResponseMsgBean);//告知发送失败 , 对方可能已经下线了
+                                    send(errorResponseMsgBean);//告知发送失败 , 对方可能已经下线了2
                                 }else{
                                     //发送到目的地
                                     serviceClient.send(messageBean);//这里要使用目的地的线程发送
