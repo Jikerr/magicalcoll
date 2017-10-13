@@ -221,14 +221,14 @@ public class SocketServerM {
                     String msgType = messageBean.getMsgType();
 
                     switch (msgType) {
-                        case "login":
+                        case Constants.Action.LOGIN:
                             login(messageBean);
                             break;
-                        case "getOnlineList":
+                        case Constants.Action.GET_ONLINE_LIST:
                             getOnlineList();
                             break;
 
-                        case "ForwardCommandToUser"://转发命令到指定用户
+                        case Constants.Action.FORWARD_COMMAND_TOUSER://转发命令到指定用户
                             try {
                                 String toClientId = messageBean.getToClientId();
                                 String fromClientId = messageBean.getFromClientId();
@@ -258,6 +258,8 @@ public class SocketServerM {
                                     send(errorResponseMsgBean);//告知发送失败 , 对方可能已经下线了2
                                 }else{
                                     //发送到目的地
+                                    messageBean.setMsgType("FromUserCommand");// 修改消息类型为来自"用户命令"
+
                                     serviceClient.send(messageBean);//这里要使用目的地的线程发送
                                     //告知转发成功 , 告知已经转发成功
                                     MessageBean errorResponseMsgBean = new MessageBean();

@@ -11,8 +11,6 @@ import java.util.Date;
  */
 public class MessageBean implements Serializable{
 
-
-
     private static final long serialVersionUID = 8860622433909654915L;
 
     private String msgType;

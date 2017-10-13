@@ -1,5 +1,7 @@
 package org.zhdev.socket.client;
 
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.zhdev.socket.entity.MessageBean;
 import org.zhdev.socket.server.SocketServerM;
 import sun.plugin2.message.Message;
@@ -57,6 +59,23 @@ public class Client {
 
     }
 
+    class SendThread implements Runnable {
+        private MessageBean msg;
+        public SendThread(MessageBean msg){
+            this.msg = msg;
+        }
+        @Override
+        public void run() {
+            try {
+                System.out.println("安卓发送消息类型 : "+msg.getMsgType());
+                System.out.println("安卓发送消息内容 : "+msg.getMsgContent());
+                dos.writeObject(msg);
+                dos.flush();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
 
     public void sendMessageToServer(MessageBean msg) {
         //printWriter.write(msg);
@@ -83,35 +102,73 @@ public class Client {
         }
     }
 
-    class ReceviceThread implements Runnable {
+   class ReceviceThread implements Runnable {
         @Override
         public void run() {
             String info = null;
             try {
                 while (bConnected) {
-                    //String str = dis.readUTF();
                     MessageBean msg = (MessageBean) dis.readObject();
-                    //if(str.indexOf("heartbeatData")==-1){
                     System.out.println("我是客户端，服务器说：" + msg.getMsgContent());
-                    //}
+                    String msgType = msg.getMsgType();
+
+                    if(null!=msgType && msgType.equals("FromUserCommand")){//来自用户的命令
+
+                        System.out.println("收到用户指令...");
+                        System.out.println("来自 : "+msg.getUser().getUserName());
+                        System.out.println("设备类型 : "+msg.getUser().getDeviceType());
+
+                        String msgContent = msg.getMsgContent();
+                        JSONObject msgContentJsonObj = new JSONObject(msgContent);
+                        String command = msgContentJsonObj.getString("command");
+                        String remark = msgContentJsonObj.getString("remark");
+
+                        System.out.println("指令 : "+command);
+                        System.out.println("备注 : "+remark);
+                        System.out.println("准备执行 : "+command);
+
+                        String cmd="shutdown -s -t 100";
+                        Process p=Runtime.getRuntime().exec(cmd);
+                        try {
+                            p.waitFor();
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                    }
                 }
                 System.out.println("接收线程已经停止...");
-                /*while((info=br.readLine())!=null){
-                    System.out.println("我是客户端，服务器说："+info);
-                }*/
+
             } catch (IOException e) {
                 e.printStackTrace();
             } catch (ClassNotFoundException e) {
                 e.printStackTrace();
+            } catch (JSONException e) {
+                e.printStackTrace();
             }
         }
     }
+
+
 
     public static void main(String[] args) {
         Client client = new Client();
         try {
             client.connectServer("localhost", 8888);
             client.startReceviceData();
+
+            //发送登录
+            MessageBean messageBean = new MessageBean();
+            messageBean.setMsgType("login");
+            messageBean.setToClientId("0");
+
+            JSONObject requestJson = new JSONObject();
+            requestJson.put("deviceType", "电脑端");
+
+            String suffixNum = String.valueOf(new Date().getTime());
+            requestJson.put("userName", "PC"+suffixNum.substring(8,suffixNum.length()));
+
+            messageBean.setMsgContent(requestJson.toString());
+            client.sendMessageToServer(messageBean);
 
             while (true) {
                 System.out.println("请输入要发送到服务器的字符 : ");
@@ -121,6 +178,7 @@ public class Client {
                     if (inputString.equals("exit")) {
                         break;
                     }
+
                     MessageBean msg = new MessageBean();
                     msg.setMsgContent("我是客户端 : "+new Date().getTime());
                     client.sendMessageToServer(msg);
@@ -130,6 +188,8 @@ public class Client {
             System.out.println("程序结束...");
 
         } catch (IOException e) {
+            e.printStackTrace();
+        } catch (JSONException e) {
             e.printStackTrace();
         }
     }
