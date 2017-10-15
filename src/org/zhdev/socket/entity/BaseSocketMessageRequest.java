@@ -11,7 +11,7 @@ import java.util.Date;
  * @Date Created in 15:51 2017/10/13
  * @Modified By :
  */
-public class SocketMessageRequest implements Serializable{
+public class BaseSocketMessageRequest implements Serializable{
 
     private static final long serialVersionUID = -3491319648103195155L;
     private String actionType;//请求action

@@ -3,8 +3,11 @@ package org.zhdev.socket.server;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.zhdev.socket.entity.BaseSocketMessageRequest;
+import org.zhdev.socket.entity.BaseSocketMessageResponse;
 import org.zhdev.socket.entity.Users;
 import org.zhdev.socket.entity.MessageBean;
+import org.zhdev.socket.utils.DateUtils;
 
 import java.io.*;
 import java.net.BindException;
@@ -121,25 +124,53 @@ public class SocketServerM {
                 heartbeatTimer.schedule(new TimerTask() {
                     public void run() {
                         //只有你客户端补全了信息之后,才会发送心跳包
-                        //if(null!=user.getUserName() && !"".equals(user.getUserName())){
                         System.out.println(new Date().getTime() + "五秒一次的心跳包");
-                        MessageBean messageBean = new MessageBean();
-                        Date nowDate = new Date();
-                        messageBean.setMsgContent(String.valueOf(nowDate.getTime()));
-                        messageBean.setMsgType("heartbeat-data-Timer");
-                        //messageBean.setToClientId(super.);
-                        messageBean.setFromClientId("0");
-                        messageBean.setUser(getSystemUser());
-                        send(messageBean);
-                        //如果发送失败 , 抛出IO异常,该发送方法认定为发送失败 , 从处理线程池中删除该客户端
-                        // }
+                        try {
+                            BaseSocketMessageResponse response = new BaseSocketMessageResponse();
+                            response.setFromUser(getSystemUser());
+                            response.setFromClientId("0");
+                            response.setMsgDate(DateUtils.getNowDate());
+                            response.setHandlerEvent("hreatbeat-data");
+                            response.setCode(200);
+                            response.setMsgDateStamp(DateUtils.getNowDateStamp());
+                            JSONObject responseBody = new JSONObject();
+                            responseBody.put("data", "It is hreatbeat data.");
+                            response.setResponseBody(responseBody);
+                            response.setToClientId(user.getClientId());
+                            response.setToUser(user);
+                            response.setResponseActionType("null-hreatbeat-data");
+                            //如果发送失败 , 抛出IO异常,该发送方法认定为发送失败 , 从处理线程池中删除该客户端
+                            reponseMsg(response);
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        }
                     }
                 }, 5000, 5000);
-
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
+
+        public void reponseMsg(BaseSocketMessageResponse response){
+            System.out.print("响应消息.");
+            try {
+                dos.writeObject(response);
+            } catch (IOException e) {//尝试发送,如果失败
+                clients.remove(user);//删除当前线程
+                heartbeatTimer.cancel();//关闭心跳包的发送
+            }
+        }
+
+        public void requestMsg(BaseSocketMessageRequest request){
+            System.out.print("请求消息.");
+            try {
+                dos.writeObject(request);
+            } catch (IOException e) {
+                clients.remove(user);
+                heartbeatTimer.cancel();
+            }
+        }
+
 
         public void send(MessageBean messageBean) {
             try {
@@ -147,7 +178,6 @@ public class SocketServerM {
             } catch (IOException e) {//尝试发送,如果失败
                 clients.remove(user);//删除当前线程
                 heartbeatTimer.cancel();//关闭心跳包的发送
-                System.out.println("对方退出了！我从List里面去掉了！");
             }
         }
 
@@ -242,12 +272,12 @@ public class SocketServerM {
                                 for (Map.Entry<Users, ServiceClient> entry : clients.entrySet()) {
                                     Users userTemp = entry.getKey();//每个user
                                     String userClientId = userTemp.getClientId();
-                                    if(toClientId.equals(userClientId)){
+                                    if (toClientId.equals(userClientId)) {
                                         serviceClient = entry.getValue();
                                         break;
                                     }
                                 }
-                                if(serviceClient==null){
+                                if (serviceClient == null) {
                                     //错误返回
                                     MessageBean errorResponseMsgBean = new MessageBean();
                                     errorResponseMsgBean.setToClientId(toClientId);
@@ -256,7 +286,7 @@ public class SocketServerM {
                                     errorResponseMsgBean.setMsgType("UserOffline");
                                     errorResponseMsgBean.setUser(getSystemUser());
                                     send(errorResponseMsgBean);//告知发送失败 , 对方可能已经下线了2
-                                }else{
+                                } else {
                                     //发送到目的地
                                     messageBean.setMsgType("FromUserCommand");// 修改消息类型为来自"用户命令"
 
