@@ -22,7 +22,6 @@ public class Client {
 
     ObjectOutputStream dos = null;
     ObjectInputStream dis = null;
-
     private boolean bConnected = false;
     private Socket clientSocket;
     private Thread receviceThreadHandle;

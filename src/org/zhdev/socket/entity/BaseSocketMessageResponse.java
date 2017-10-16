@@ -1,5 +1,7 @@
 package org.zhdev.socket.entity;
 
+
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.Serializable;
@@ -17,7 +19,8 @@ public class BaseSocketMessageResponse implements Serializable {
 
 
     private String handlerEvent;//处理事件
-    private JSONObject responseBody;//响应主体
+    private String responseBody;//响应主体
+
     private Integer code;//响应代码 200 成功 500 服务器错误 404 不接受的请求类型
 
     private String toClientId;//发送到哪个客户端ID
@@ -44,11 +47,19 @@ public class BaseSocketMessageResponse implements Serializable {
     }
 
     public JSONObject getResponseBody() {
-        return responseBody;
+        JSONObject jsonObject = null;
+        try {
+            if (null != this.responseBody && !"".equals(this.responseBody)) {
+                jsonObject = new JSONObject(this.responseBody);
+            }
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        return jsonObject;
     }
 
     public void setResponseBody(JSONObject responseBody) {
-        this.responseBody = responseBody;
+        this.responseBody = responseBody.toString();
     }
 
     public Integer getCode() {

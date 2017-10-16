@@ -1,5 +1,7 @@
 package org.zhdev.socket.entity;
 
+
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.Serializable;
@@ -11,11 +13,11 @@ import java.util.Date;
  * @Date Created in 15:51 2017/10/13
  * @Modified By :
  */
-public class BaseSocketMessageRequest implements Serializable{
+public class BaseSocketMessageRequest implements Serializable {
 
     private static final long serialVersionUID = -3491319648103195155L;
     private String actionType;//请求action
-    private JSONObject requestParameters;//请求参数
+    private String requestParameters;//请求参数
     private String toClientId;//发送到哪个客户端ID
     private String fromClientId;//来自哪个客户端ID
     private Users toUser;//发送到哪个用户
@@ -33,11 +35,19 @@ public class BaseSocketMessageRequest implements Serializable{
     }
 
     public JSONObject getRequestParameters() {
-        return requestParameters;
+        JSONObject jsonObject = null;
+        try {
+            if (null != this.requestParameters && !"".equals(this.requestParameters)) {
+                jsonObject = new JSONObject(this.requestParameters);
+            }
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        return jsonObject;
     }
 
     public void setRequestParameters(JSONObject requestParameters) {
-        this.requestParameters = requestParameters;
+        this.requestParameters = requestParameters.toString();
     }
 
     public String getToClientId() {

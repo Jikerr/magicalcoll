@@ -3,6 +3,9 @@ package org.zhdev.socket.server;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+//import org.zhdev.socket.utils.JSONObject;
+//import org.zhdev.socket.utils.JSONArray;
+
 import org.zhdev.socket.entity.BaseSocketMessageRequest;
 import org.zhdev.socket.entity.BaseSocketMessageResponse;
 import org.zhdev.socket.entity.Users;
@@ -130,7 +133,7 @@ public class SocketServerM {
                             response.setFromUser(getSystemUser());
                             response.setFromClientId("0");
                             response.setMsgDate(DateUtils.getNowDate());
-                            response.setHandlerEvent("hreatbeat-data");
+                            response.setHandlerEvent(Constants.HandlerEvent.HREATBEAT_DATA);
                             response.setCode(200);
                             response.setMsgDateStamp(DateUtils.getNowDateStamp());
                             JSONObject responseBody = new JSONObject();
@@ -185,26 +188,32 @@ public class SocketServerM {
             try {
                 System.out.println("获取在线列表....");
                 Set<Users> onLineSet = clients.keySet();
-                JSONObject responseJson = new JSONObject();
                 JSONArray onLineJsonArray = new JSONArray();
                 for (Users onLineUser : onLineSet) {
                     JSONObject userJsonObj = new JSONObject(onLineUser);
                     onLineJsonArray.put(userJsonObj);
                 }
-                responseJson.put("data", onLineJsonArray);
-                MessageBean response = new MessageBean();
-                response.setMsgType("getOnlineListResult");
-                response.setMsgContent(responseJson.toString());
-                response.setToClientId(user.getClientId());
+                BaseSocketMessageResponse response = new BaseSocketMessageResponse();
+                response.setFromUser(getSystemUser());
                 response.setFromClientId("0");
-                response.setUser(getSystemUser());
-                send(response);//返还给客户端
+                response.setMsgDate(DateUtils.getNowDate());
+                response.setHandlerEvent(Constants.HandlerEvent.GET_ONLINE_LIST_RESULT);
+                response.setCode(200);
+                response.setMsgDateStamp(DateUtils.getNowDateStamp());
+                JSONObject responseBody = new JSONObject();
+                responseBody.put("data", onLineJsonArray);
+                response.setResponseBody(responseBody);
+                response.setToClientId(user.getClientId());
+                response.setToUser(user);
+                response.setResponseActionType(Constants.Action.GET_ONLINE_LIST);
+                //如果发送失败 , 抛出IO异常,该发送方法认定为发送失败 , 从处理线程池中删除该客户端
+                reponseMsg(response);
             } catch (JSONException e) {
                 e.printStackTrace();
             }
         }
 
-        public void login(MessageBean request) {
+        public void login(BaseSocketMessageRequest request) {
             try {
                 String responseMsg = "login is failed!";
                 int code = 400;
@@ -215,99 +224,130 @@ public class SocketServerM {
                     }
                 }
                 if (user != null) {
-                    String msgContent = request.getMsgContent();
-                    JSONObject contentJsonObj = null;
-                    contentJsonObj = new JSONObject(msgContent);
-                    String deviceType = contentJsonObj.getString("deviceType");
-                    String userName = contentJsonObj.getString("userName");
+                    JSONObject parameters = request.getRequestParameters();
+
+                    String deviceType = parameters.getString("deviceType");
+                    String userName = parameters.getString("userName");
+
                     user.setDeviceType(deviceType);
                     user.setUserName(userName);
-                    setUser(user);
+
+                    setUser(user);//设置当前线程的用户对象
                     responseMsg = "login is success";
                     code = 200;
                 }
-                MessageBean response = new MessageBean();
-                JSONObject responseContentJson = new JSONObject();
-                responseContentJson.put("msg", responseMsg);
-                responseContentJson.put("code", code);
-                response.setMsgContent(responseContentJson.toString());
-                response.setMsgType("loginResult");
-                response.setToClientId(user.getClientId());
-                response.setFromClientId("0");
-                response.setUser(getSystemUser());
-                send(response);
 
+                BaseSocketMessageResponse response = new BaseSocketMessageResponse();
+                response.setFromUser(getSystemUser());
+                response.setFromClientId("0");
+                response.setMsgDate(DateUtils.getNowDate());
+                response.setHandlerEvent(Constants.HandlerEvent.LOGIN_RESPONSE);
+                response.setCode(200);
+                response.setMsgDateStamp(DateUtils.getNowDateStamp());
+                JSONObject responseBody = new JSONObject();
+                responseBody.put("msg", responseMsg);
+                responseBody.put("code", code);
+                response.setResponseBody(responseBody);
+                response.setToClientId(user.getClientId());
+                response.setToUser(user);
+                response.setResponseActionType(Constants.Action.LOGIN);
+                //如果发送失败 , 抛出IO异常,该发送方法认定为发送失败 , 从处理线程池中删除该客户端
+                reponseMsg(response);
             } catch (JSONException e) {
                 e.printStackTrace();
             }
         }
 
+        public void forwardCommandToUser(BaseSocketMessageRequest request){
+            try {
+                String toClientId = request.getToClientId();
+                String fromClientId = request.getFromClientId();
+                JSONObject parameters = request.getRequestParameters();
+
+                String command = parameters.getString("command");
+                String remark = parameters.getString("remark");
+
+                ServiceClient serviceClient = null;//找到要发送的用户线程
+                for (Map.Entry<Users, ServiceClient> entry : clients.entrySet()) {
+                    Users userTemp = entry.getKey();//每个user
+                    String userClientId = userTemp.getClientId();
+                    if (toClientId.equals(userClientId)) {
+                        serviceClient = entry.getValue();
+                        break;
+                    }
+                }
+                if (serviceClient == null) {
+                    BaseSocketMessageResponse response = new BaseSocketMessageResponse();
+                    response.setFromUser(request.getFromUser());
+                    response.setFromClientId(request.getFromClientId());
+                    response.setMsgDate(DateUtils.getNowDate());
+                    response.setHandlerEvent(Constants.HandlerEvent.MESSAGE_FORWARD_USER_OFFLINE);
+                    response.setCode(200);
+                    response.setMsgDateStamp(DateUtils.getNowDateStamp());
+                    response.setToClientId(request.getToClientId());
+                    response.setToUser(request.getToUser());
+                    response.setResponseActionType(Constants.Action.FORWARD_COMMAND_TOUSER);
+                    //如果发送失败 , 抛出IO异常,该发送方法认定为发送失败 , 从处理线程池中删除该客户端
+                    reponseMsg(response);
+
+                } else {
+                    BaseSocketMessageResponse forwardResponse = new BaseSocketMessageResponse();
+                    forwardResponse.setFromUser(request.getFromUser());
+                    forwardResponse.setFromClientId(request.getFromClientId());
+                    forwardResponse.setMsgDate(DateUtils.getNowDate());
+                    forwardResponse.setHandlerEvent(Constants.HandlerEvent.FROM_USER_COMMAND);
+                    forwardResponse.setCode(200);
+                    forwardResponse.setMsgDateStamp(DateUtils.getNowDateStamp());
+                    JSONObject forWardresponseBody = new JSONObject();
+                    forWardresponseBody.put("command",command );
+                    forWardresponseBody.put("remark", remark);
+                    forwardResponse.setResponseBody(forWardresponseBody);
+                    forwardResponse.setToClientId(user.getClientId());
+                    forwardResponse.setToUser(user);
+                    forwardResponse.setResponseActionType(Constants.Action.FORWARD_COMMAND_TOUSER);
+                    //使用对应的用户线程响应消息
+                    serviceClient.reponseMsg(forwardResponse);
+
+                    //响应给请求用户表达请求成功 ,
+                    BaseSocketMessageResponse response = new BaseSocketMessageResponse();
+                    response.setFromUser(request.getFromUser());
+                    response.setFromClientId(request.getFromClientId());
+                    response.setMsgDate(DateUtils.getNowDate());
+                    response.setHandlerEvent(Constants.HandlerEvent.MESSAGE_FORWARD_SUCCESS);
+                    response.setCode(200);
+                    response.setMsgDateStamp(DateUtils.getNowDateStamp());
+                    response.setToClientId(user.getClientId());
+                    response.setToUser(user);
+                    response.setResponseActionType(Constants.Action.FORWARD_COMMAND_TOUSER);
+                    reponseMsg(response);
+
+                }
+
+            } catch (JSONException jsonE) {
+                jsonE.printStackTrace();
+            }
+        }
+
+
         public void run() {
             try {
                 while (bConnected) {
                     //String str = dis.readUTF();
-                    MessageBean messageBean = (MessageBean) dis.readObject();
-                    System.out.println("客户端消息:" + messageBean.getMsgContent());
-                    String msgType = messageBean.getMsgType();
+                    BaseSocketMessageRequest request = (BaseSocketMessageRequest) dis.readObject();
+                    System.out.println("客户端请求处理类型:" + request.getActionType());
+                    System.out.println("客户端请求处理参数:" + request.getRequestParameters().toString());
+                    String actionType = request.getActionType();
 
-                    switch (msgType) {
+                    switch (actionType) {
                         case Constants.Action.LOGIN:
-                            login(messageBean);
+                            login(request);
                             break;
                         case Constants.Action.GET_ONLINE_LIST:
                             getOnlineList();
                             break;
-
                         case Constants.Action.FORWARD_COMMAND_TOUSER://转发命令到指定用户
-                            try {
-                                String toClientId = messageBean.getToClientId();
-                                String fromClientId = messageBean.getFromClientId();
-                                String msgContent = messageBean.getMsgContent();
-
-                                JSONObject msgContentJsonObj = new JSONObject(msgContent);
-                                String command = msgContentJsonObj.getString("command");
-                                String remark = msgContentJsonObj.getString("remark");
-
-                                ServiceClient serviceClient = null;//找到要发送的用户线程
-                                for (Map.Entry<Users, ServiceClient> entry : clients.entrySet()) {
-                                    Users userTemp = entry.getKey();//每个user
-                                    String userClientId = userTemp.getClientId();
-                                    if (toClientId.equals(userClientId)) {
-                                        serviceClient = entry.getValue();
-                                        break;
-                                    }
-                                }
-                                if (serviceClient == null) {
-                                    //错误返回
-                                    MessageBean errorResponseMsgBean = new MessageBean();
-                                    errorResponseMsgBean.setToClientId(toClientId);
-                                    errorResponseMsgBean.setFromClientId("0");
-                                    errorResponseMsgBean.setMsgContent("对方可能已经下线");
-                                    errorResponseMsgBean.setMsgType("UserOffline");
-                                    errorResponseMsgBean.setUser(getSystemUser());
-                                    send(errorResponseMsgBean);//告知发送失败 , 对方可能已经下线了2
-                                } else {
-                                    //发送到目的地
-                                    messageBean.setMsgType("FromUserCommand");// 修改消息类型为来自"用户命令"
-
-                                    serviceClient.send(messageBean);//这里要使用目的地的线程发送
-                                    //告知转发成功 , 告知已经转发成功
-                                    MessageBean errorResponseMsgBean = new MessageBean();
-                                    errorResponseMsgBean.setToClientId(toClientId);
-                                    errorResponseMsgBean.setFromClientId("0");
-                                    errorResponseMsgBean.setMsgContent("命令成功送达!");
-                                    errorResponseMsgBean.setMsgType("MessageForwardSuccess");
-                                    errorResponseMsgBean.setUser(getSystemUser());
-                                    send(errorResponseMsgBean);//告知发送失败 , 对方可能已经下线了
-                                }
-
-                            } catch (JSONException jsonE) {
-                                jsonE.printStackTrace();
-                            }
-
-
+                            forwardCommandToUser(request);
                             break;
-
                         default:
                             break;
                     }
